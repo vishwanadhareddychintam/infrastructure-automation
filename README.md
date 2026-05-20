@@ -1,27 +1,42 @@
 # Infrastructure Automation
 
-Terraform for AWS in **two phases**: deploy **VPC networking** first, then deploy **applications on an ECS Fargate cluster** (ALB, HTTPS, Route 53). Each phase is a separate Terraform root module with its own state file.
+Multi-cloud Terraform: deploy **networking first**, then **container applications** with HTTPS and DNS. Each cloud uses two phases and separate state files.
 
-## Deployment flow
+| Cloud | Phase 1 | Phase 2 | Guide |
+|-------|---------|---------|--------|
+| **AWS** | `AWS/` — VPC, NAT, S3 endpoint | `AWS/ECS-Infrastructure/` — ECS Fargate, ALB, 4 services | [Below](#aws) |
+| **Azure** | `Azure/` — VNet, NAT, ACA + App GW subnets | `Azure/Container-Apps-Infrastructure/` — Container Apps, App Gateway WAF, 4 apps | [Azure/README.md](Azure/README.md) |
+
+## AWS deployment flow
 
 ```
 Prerequisites (once per account)
         │
         ▼
 ┌───────────────────────┐
-│ Phase 1: Networking │  AWS/  — VPC, subnets, NAT, S3 endpoint
+│ Phase 1: Networking   │  AWS/
 └───────────┬───────────┘
-            │ outputs: vpc_id, public_subnet_ids, private_subnet_ids
+            │ vpc_id, subnet IDs
             ▼
 ┌───────────────────────┐
-│ Phase 2: ECS apps     │  AWS/ECS-Infrastructure/  — cluster, ALB, 4 services, DNS
+│ Phase 2: ECS apps     │  AWS/ECS-Infrastructure/
 └───────────────────────┘
 ```
 
 | Phase | Directory | State key (example) | Guide |
 |-------|-----------|---------------------|--------|
-| 1 — VPC | `AWS/` | `networking/dev/terraform.tfstate` | [Below](#phase-1-vpc-networking) |
-| 2 — ECS | `AWS/ECS-Infrastructure/` | `ECS-Infrastructure/dev/terraform.tfstate` | [AWS/ECS-Infrastructure/README.md](AWS/ECS-Infrastructure/README.md) |
+| 1 — VPC | `AWS/` | `networking/dev/terraform.tfstate` | [Phase 1](#phase-1-vpc-networking) |
+| 2 — ECS | `AWS/ECS-Infrastructure/` | `ECS-Infrastructure/dev/terraform.tfstate` | [ECS README](AWS/ECS-Infrastructure/README.md) |
+
+## Azure deployment flow
+
+Same pattern: [Azure/README.md](Azure/README.md) → networking apply → [Container-Apps-Infrastructure](Azure/Container-Apps-Infrastructure/README.md).
+
+State backend: `backend.hcl.azure.example` (azurerm storage).
+
+---
+
+## AWS
 
 ---
 
@@ -29,16 +44,11 @@ Prerequisites (once per account)
 
 ```
 infrastructure-automation/
-├── README.md                 # This file — full deployment guide
-├── backend.hcl.example       # Remote state (copy per phase; change key)
-└── AWS/
-    ├── main.tf               # Phase 1: networking
-    ├── terraform.tfvars.example
-    ├── modules/networking/
-    ├── iampolicies/          # Example IAM policies
-    └── ECS-Infrastructure/   # Phase 2: ECS application platform
-        ├── README.md
-        └── terraform.tfvars.example
+├── README.md
+├── backend.hcl.example         # AWS S3 state
+├── backend.hcl.azure.example   # Azure Storage state
+├── AWS/                          # VPC + ECS-Infrastructure/
+└── Azure/                        # VNet + Container-Apps-Infrastructure/
 ```
 
 ---

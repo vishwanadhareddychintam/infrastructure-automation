@@ -1,0 +1,20 @@
+# Copy to terraform.tfvars and customize.
+
+# subscription_id = "00000000-0000-0000-0000-000000000000"  # optional if using az login
+location = "eastus"
+
+# --- Dev (10.0.0.0/16) ---
+vnet_address_space = "10.0.0.0/16"
+public_subnet_prefixes = [
+  "10.0.1.0/24",
+  "10.0.2.0/24",
+]
+private_subnet_prefixes = [
+  "10.0.3.0/24",
+  "10.0.4.0/24",
+]
+container_apps_subnet_prefix = "10.0.8.0/23"
+app_gateway_subnet_prefix    = "10.0.16.0/24"
+
+name_prefix = "myapp"
+environment = "dev"

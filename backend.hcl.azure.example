@@ -1,0 +1,15 @@
+# Azure remote state — use with:
+#   cd Azure && terraform init -reconfigure -backend-config=../backend.hcl.azure.example
+#   cd Azure/Container-Apps-Infrastructure && terraform init -reconfigure -backend-config=../../backend.hcl.azure.example
+#
+# Create storage account + container first (see Azure/README.md).
+
+resource_group_name  = "rg-terraform-state"
+storage_account_name = "YOUR_TFSTATE_STORAGE_ACCOUNT"
+container_name       = "tfstate"
+
+# Phase 1 networking:
+# key = "azure/networking/dev.terraform.tfstate"
+# Phase 2 container apps:
+# key = "azure/container-apps/dev.terraform.tfstate"
+key = "azure/networking/dev.terraform.tfstate"

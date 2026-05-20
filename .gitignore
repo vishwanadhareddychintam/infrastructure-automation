@@ -2,6 +2,8 @@
 backend.hcl
 AWS/terraform.tfvars
 AWS/ECS-Infrastructure/terraform.tfvars
+Azure/terraform.tfvars
+Azure/Container-Apps-Infrastructure/terraform.tfvars
 .terraform/
 *.tfstate
 *.tfstate.*

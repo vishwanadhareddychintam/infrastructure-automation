@@ -1,0 +1,77 @@
+# Copy to terraform.tfvars after Phase 1 (Azure networking) is applied.
+
+# subscription_id = "00000000-0000-0000-0000-000000000000"
+location = "eastus"
+
+name_prefix = "myapp"
+environment = "dev"
+
+# Phase 1 outputs (terraform output from Azure/)
+container_apps_subnet_id    = "/subscriptions/.../subnets/myapp-dev-aca"
+log_analytics_workspace_id  = "/subscriptions/.../workspaces/myapp-dev-law"
+app_gateway_subnet_id       = "/subscriptions/.../subnets/myapp-dev-appgw"
+app_gateway_public_ip_id    = "/subscriptions/.../publicIPAddresses/myapp-dev-appgw-pip"
+app_gateway_public_ip_address = "20.0.0.1"
+
+# TLS: Key Vault certificate secret ID (App Gateway must have GET access to Key Vault)
+key_vault_certificate_secret_id = "https://my-kv.vault.azure.net/secrets/my-wildcard-cert/abc123"
+
+# DNS
+dns_zone_name                = "example.com"
+dns_zone_resource_group_name = "rg-dns"
+
+dns_route_container_apps = {
+  api1 = "svc01"
+  api2 = "svc02"
+  api3 = "svc03"
+  web  = "svc04"
+  root = "svc04"
+}
+
+service_short_names = {
+  svc01 = "api1"
+  svc02 = "api2"
+  svc03 = "api3"
+  svc04 = "web"
+}
+
+default_dns_listener_key = "web"
+
+# Optional ACR
+# acr_login_server = "myacr.azurecr.io"
+# acr_resource_id  = "/subscriptions/.../registries/myacr"
+
+container_app_definitions = {
+  svc01 = {
+    container_name    = "api1"
+    image             = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+    cpu               = 0.5
+    memory            = "1Gi"
+    container_port    = 80
+    health_check_path = "/"
+  }
+  svc02 = {
+    container_name    = "api2"
+    image             = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+    cpu               = 0.5
+    memory            = "1Gi"
+    container_port    = 80
+    health_check_path = "/"
+  }
+  svc03 = {
+    container_name    = "api3"
+    image             = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+    cpu               = 0.5
+    memory            = "1Gi"
+    container_port    = 80
+    health_check_path = "/"
+  }
+  svc04 = {
+    container_name    = "web"
+    image             = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+    cpu               = 0.5
+    memory            = "1Gi"
+    container_port    = 80
+    health_check_path = "/"
+  }
+}

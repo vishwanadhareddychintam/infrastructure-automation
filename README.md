@@ -14,7 +14,7 @@ Prerequisites (once per account)
             │ outputs: vpc_id, public_subnet_ids, private_subnet_ids
             ▼
 ┌───────────────────────┐
-│ Phase 2: ECS apps     │  AWS/ECS-Infrastructure/  — cluster, ALB, 7 services, DNS
+│ Phase 2: ECS apps     │  AWS/ECS-Infrastructure/  — cluster, ALB, 4 services, DNS
 └───────────────────────┘
 ```
 
@@ -234,7 +234,7 @@ Run **only after Phase 1 succeeds**. ECS tasks run in **private subnets**; the A
 |-----------|-------------|
 | ECS cluster | Fargate (+ optional Container Insights) |
 | ALB | HTTPS, HTTP→HTTPS redirect, host-based routing |
-| 7 ECS services | Task definitions + services (customize in tfvars) |
+| 4 ECS services | Task definitions + services (customize in tfvars) |
 | Target groups | One per service |
 | Route 53 | Alias records for app hostnames |
 | Security groups | ALB ↔ tasks |

@@ -39,21 +39,18 @@ variable "ecs_service_name_prefix" {
 
 variable "service_short_names" {
   type        = map(string)
-  description = "Short label per svc01–svc07 for ECS service and target group names"
+  description = "Short label per svc01–svc04 for ECS service and target group names"
 
   default = {
     svc01 = "api1"
     svc02 = "api2"
     svc03 = "api3"
-    svc04 = "api4"
-    svc05 = "api5"
-    svc06 = "api6"
-    svc07 = "web"
+    svc04 = "web"
   }
 
   validation {
-    condition     = sort(keys(var.service_short_names)) == tolist(["svc01", "svc02", "svc03", "svc04", "svc05", "svc06", "svc07"])
-    error_message = "service_short_names must contain exactly keys svc01 through svc07."
+    condition     = sort(keys(var.service_short_names)) == tolist(["svc01", "svc02", "svc03", "svc04"])
+    error_message = "service_short_names must contain exactly keys svc01 through svc04."
   }
 }
 
@@ -98,11 +95,11 @@ variable "ecs_task_definitions" {
       valueFrom = string
     })), [])
   }))
-  description = "Exactly seven Fargate task definitions; keys must match ecs_services. health_check_path is used by the ALB target group. secrets = env var name + Secrets Manager or SSM ARN."
+  description = "Exactly four Fargate task definitions; keys must match ecs_services. health_check_path is used by the ALB target group. secrets = env var name + Secrets Manager or SSM ARN."
 
   validation {
-    condition     = length(var.ecs_task_definitions) == 7
-    error_message = "Provide exactly seven entries in ecs_task_definitions."
+    condition     = length(var.ecs_task_definitions) == 4
+    error_message = "Provide exactly four entries in ecs_task_definitions."
   }
 }
 
@@ -115,11 +112,11 @@ variable "ecs_services" {
     enable_execute_command             = optional(bool, false)
     propagate_tags                     = optional(string, "NONE")
   }))
-  description = "Exactly seven ECS services; keys must match ecs_task_definitions."
+  description = "Exactly four ECS services; keys must match ecs_task_definitions."
 
   validation {
-    condition     = length(var.ecs_services) == 7
-    error_message = "Provide exactly seven entries in ecs_services."
+    condition     = length(var.ecs_services) == 4
+    error_message = "Provide exactly four entries in ecs_services."
   }
 }
 
@@ -131,11 +128,11 @@ variable "target_groups" {
     health_check_path       = optional(string, "/")
     health_check_matcher    = optional(string, "200-399")
   }))
-  description = "Exactly seven ALB target groups (svc01–svc07). Use ecs_task_definition_key to inherit port and health path from the task."
+  description = "Exactly four ALB target groups (svc01–svc04). Use ecs_task_definition_key to inherit port and health path from the task."
 
   validation {
-    condition     = sort(keys(var.target_groups)) == tolist(["svc01", "svc02", "svc03", "svc04", "svc05", "svc06", "svc07"])
-    error_message = "target_groups must contain exactly keys svc01 through svc07."
+    condition     = sort(keys(var.target_groups)) == tolist(["svc01", "svc02", "svc03", "svc04"])
+    error_message = "target_groups must contain exactly keys svc01 through svc04."
   }
 }
 
@@ -163,14 +160,14 @@ variable "dns_hostnames" {
 
 variable "dns_route_target_groups" {
   type        = map(string)
-  description = "Maps DNS record keys to target_groups keys (svc01–svc07) for HTTPS host-header rules"
+  description = "Maps DNS record keys to target_groups keys (svc01–svc04) for HTTPS host-header rules"
 
   validation {
     condition = alltrue([
       for v in values(var.dns_route_target_groups) :
-      contains(["svc01", "svc02", "svc03", "svc04", "svc05", "svc06", "svc07"], v)
+      contains(["svc01", "svc02", "svc03", "svc04"], v)
     ])
-    error_message = "dns_route_target_groups values must be svc01 through svc07."
+    error_message = "dns_route_target_groups values must be svc01 through svc04."
   }
 }
 

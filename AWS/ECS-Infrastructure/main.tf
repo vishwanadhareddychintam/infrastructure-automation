@@ -11,7 +11,7 @@ resource "terraform_data" "ecs_services_and_task_definitions_keys" {
   lifecycle {
     precondition {
       condition     = sort(keys(var.ecs_services)) == sort(keys(var.ecs_task_definitions))
-      error_message = "ecs_services and ecs_task_definitions must use the same seven map keys."
+      error_message = "ecs_services and ecs_task_definitions must use the same four map keys."
     }
   }
 }

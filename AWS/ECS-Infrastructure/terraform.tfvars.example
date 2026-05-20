@@ -29,30 +29,23 @@ route53_hosted_zone_id = null # or "Z1234567890ABC"
 # Optional: override auto-generated hostnames (default: myapp-<key>-dev.example.com)
 # dns_hostnames = { web = "app.dev.example.com" }
 
-# Map DNS keys to target group keys (svc01–svc07)
+# Map DNS keys to target group keys (svc01–svc04)
 dns_route_target_groups = {
   api1 = "svc01"
   api2 = "svc02"
   api3 = "svc03"
-  api4 = "svc04"
-  api5 = "svc05"
-  api6 = "svc06"
-  web  = "svc07"
-  root = "svc07"
+  web  = "svc04"
+  root = "svc04"
 }
 
-# Short names used in ECS service and target group AWS names
 service_short_names = {
   svc01 = "api1"
   svc02 = "api2"
   svc03 = "api3"
-  svc04 = "api4"
-  svc05 = "api5"
-  svc06 = "api6"
-  svc07 = "web"
+  svc04 = "web"
 }
 
-# Seven Fargate tasks — replace images with your ECR URLs or public images
+# Four Fargate tasks — replace images with your ECR URLs
 ecs_task_definitions = {
   svc01 = {
     cpu               = 512
@@ -82,30 +75,6 @@ ecs_task_definitions = {
   svc04 = {
     cpu               = 512
     memory            = 1024
-    container_name    = "api4"
-    image             = "123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp-api4:latest"
-    container_port    = 8080
-    health_check_path = "/health"
-  }
-  svc05 = {
-    cpu               = 512
-    memory            = 1024
-    container_name    = "api5"
-    image             = "123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp-api5:latest"
-    container_port    = 8080
-    health_check_path = "/health"
-  }
-  svc06 = {
-    cpu               = 512
-    memory            = 1024
-    container_name    = "api6"
-    image             = "123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp-api6:latest"
-    container_port    = 8080
-    health_check_path = "/health"
-  }
-  svc07 = {
-    cpu               = 512
-    memory            = 1024
     container_name    = "web"
     image             = "123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp-web:latest"
     container_port    = 80
@@ -118,9 +87,6 @@ ecs_services = {
   svc02 = { desired_count = 1 }
   svc03 = { desired_count = 1 }
   svc04 = { desired_count = 1 }
-  svc05 = { desired_count = 1 }
-  svc06 = { desired_count = 1 }
-  svc07 = { desired_count = 1 }
 }
 
 target_groups = {
@@ -128,12 +94,9 @@ target_groups = {
   svc02 = { ecs_task_definition_key = "svc02" }
   svc03 = { ecs_task_definition_key = "svc03" }
   svc04 = { ecs_task_definition_key = "svc04" }
-  svc05 = { ecs_task_definition_key = "svc05" }
-  svc06 = { ecs_task_definition_key = "svc06" }
-  svc07 = { ecs_task_definition_key = "svc07" }
 }
 
-default_target_group_key = "svc07"
+default_target_group_key = "svc04"
 
 alb_listener_rules = []
 

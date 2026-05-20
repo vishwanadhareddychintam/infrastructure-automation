@@ -1,6 +1,6 @@
 # Phase 2 — ECS Infrastructure
 
-Deploys **seven Fargate services** on an ECS cluster behind an **Application Load Balancer** (HTTPS) with **Route 53** DNS.
+Deploys **four Fargate services** on an ECS cluster behind an **Application Load Balancer** (HTTPS) with **Route 53** DNS.
 
 This is **Phase 2** of the repo. Complete **Phase 1 (VPC networking)** in [../../README.md](../../README.md) before running Terraform here.
 
@@ -43,7 +43,7 @@ terraform output private_subnet_ids
 | 2 | **Route 53** | Public zone for `route53_domain_name`; optional `route53_hosted_zone_id` |
 | 3 | **ECR / images** | Build and push images; set `image` per service in `ecs_task_definitions` |
 | 4 | **Secrets** (if used) | Create Secrets Manager secrets; use `valueFrom` ARNs in task definitions |
-| 5 | **DNS map** | Configure `dns_route_target_groups` (hostname key → svc01–svc07) |
+| 5 | **DNS map** | Configure `dns_route_target_groups` (hostname key → svc01–svc04) |
 
 ---
 
@@ -53,7 +53,7 @@ terraform output private_subnet_ids
 |-----------|-------------|
 | ECS cluster | `${name_prefix}-${environment}-ecs` (override with `cluster_name`) |
 | ALB | Internet-facing in **public subnets**; HTTPS + host rules |
-| Target groups | Seven (svc01–svc07) |
+| Target groups | Four (svc01–svc04) |
 | ECS services | Fargate in **private subnets**; one task definition per key |
 | Route 53 | Alias A records: `{name_prefix}-{key}-{environment}.{domain}` unless `dns_hostnames` overrides |
 | Security groups | ALB (ingress 80/443); tasks (ingress from ALB on container ports) |
@@ -104,7 +104,7 @@ Override any host with `dns_hostnames` in `terraform.tfvars`.
 |----------|---------|
 | `name_prefix` / `environment` | Tags and generated names |
 | `service_short_names` | Short names in ECS service / TG resources (svc01 → api1, etc.) |
-| `dns_route_target_groups` | DNS key → target group key (svc01–svc07) |
+| `dns_route_target_groups` | DNS key → target group key (svc01–svc04) |
 | `dns_hostnames` | Full FQDN overrides |
 | `ecs_task_definitions` | CPU, memory, `image`, `container_port`, `secrets` |
 | `ecs_services` | `desired_count`, deployment settings per service |

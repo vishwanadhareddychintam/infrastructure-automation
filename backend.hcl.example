@@ -6,6 +6,8 @@
 # See policies/terraform-state-backend.json.example.
 
 bucket         = "YOUR_STATE_BUCKET"
+# Networking: networking/dev/terraform.tfstate
+# ECS:       ecs/dev/terraform.tfstate
 key            = "networking/dev/terraform.tfstate"
 region         = "us-east-1"
 encrypt        = true

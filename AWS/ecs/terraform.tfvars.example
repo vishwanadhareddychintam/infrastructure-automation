@@ -1,0 +1,152 @@
+# Copy to terraform.tfvars and fill in your account values.
+# Get vpc_id and subnet IDs from the networking stack:
+#   cd ../ && terraform output
+
+aws_profile = "terraform-infra"
+aws_region  = "us-east-1"
+
+name_prefix = "myapp"
+environment = "dev"
+
+# From networking module outputs
+vpc_id = "vpc-xxxxxxxx"
+public_subnet_ids = [
+  "subnet-xxxxxxxx",
+  "subnet-yyyyyyyy",
+]
+private_subnet_ids = [
+  "subnet-aaaaaaaa",
+  "subnet-bbbbbbbb",
+]
+
+# ACM certificate in the same region as the ALB (HTTPS)
+acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# DNS
+route53_domain_name    = "example.com"
+route53_hosted_zone_id = null # or "Z1234567890ABC"
+
+# Optional: override auto-generated hostnames (default: myapp-<key>-dev.example.com)
+# dns_hostnames = { web = "app.dev.example.com" }
+
+# Map DNS keys to target group keys (svc01–svc07)
+dns_route_target_groups = {
+  api1 = "svc01"
+  api2 = "svc02"
+  api3 = "svc03"
+  api4 = "svc04"
+  api5 = "svc05"
+  api6 = "svc06"
+  web  = "svc07"
+  root = "svc07"
+}
+
+# Short names used in ECS service and target group AWS names
+service_short_names = {
+  svc01 = "api1"
+  svc02 = "api2"
+  svc03 = "api3"
+  svc04 = "api4"
+  svc05 = "api5"
+  svc06 = "api6"
+  svc07 = "web"
+}
+
+# Seven Fargate tasks — replace images with your ECR URLs or public images
+ecs_task_definitions = {
+  svc01 = {
+    cpu               = 512
+    memory            = 1024
+    container_name    = "api1"
+    image             = "123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp-api1:latest"
+    container_port    = 8080
+    health_check_path = "/health"
+    secrets           = []
+  }
+  svc02 = {
+    cpu               = 512
+    memory            = 1024
+    container_name    = "api2"
+    image             = "123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp-api2:latest"
+    container_port    = 8080
+    health_check_path = "/health"
+  }
+  svc03 = {
+    cpu               = 512
+    memory            = 1024
+    container_name    = "api3"
+    image             = "123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp-api3:latest"
+    container_port    = 8080
+    health_check_path = "/health"
+  }
+  svc04 = {
+    cpu               = 512
+    memory            = 1024
+    container_name    = "api4"
+    image             = "123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp-api4:latest"
+    container_port    = 8080
+    health_check_path = "/health"
+  }
+  svc05 = {
+    cpu               = 512
+    memory            = 1024
+    container_name    = "api5"
+    image             = "123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp-api5:latest"
+    container_port    = 8080
+    health_check_path = "/health"
+  }
+  svc06 = {
+    cpu               = 512
+    memory            = 1024
+    container_name    = "api6"
+    image             = "123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp-api6:latest"
+    container_port    = 8080
+    health_check_path = "/health"
+  }
+  svc07 = {
+    cpu               = 512
+    memory            = 1024
+    container_name    = "web"
+    image             = "123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp-web:latest"
+    container_port    = 80
+    health_check_path = "/"
+  }
+}
+
+ecs_services = {
+  svc01 = { desired_count = 1 }
+  svc02 = { desired_count = 1 }
+  svc03 = { desired_count = 1 }
+  svc04 = { desired_count = 1 }
+  svc05 = { desired_count = 1 }
+  svc06 = { desired_count = 1 }
+  svc07 = { desired_count = 1 }
+}
+
+target_groups = {
+  svc01 = { ecs_task_definition_key = "svc01" }
+  svc02 = { ecs_task_definition_key = "svc02" }
+  svc03 = { ecs_task_definition_key = "svc03" }
+  svc04 = { ecs_task_definition_key = "svc04" }
+  svc05 = { ecs_task_definition_key = "svc05" }
+  svc06 = { ecs_task_definition_key = "svc06" }
+  svc07 = { ecs_task_definition_key = "svc07" }
+}
+
+default_target_group_key = "svc07"
+
+alb_listener_rules = []
+
+iam_policy_document = <<-JSON
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowStsGetCallerIdentity",
+      "Effect": "Allow",
+      "Action": ["sts:GetCallerIdentity"],
+      "Resource": "*"
+    }
+  ]
+}
+JSON

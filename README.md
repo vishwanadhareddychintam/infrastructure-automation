@@ -1,22 +1,21 @@
 # Infrastructure Automation
 
-Reusable Terraform for AWS networking (VPC, subnets, NAT, S3 gateway endpoint). Clone this repo, configure your AWS account once, then deploy per environment.
+Reusable Terraform for AWS: **VPC networking** and **ECS Fargate** (ALB, HTTPS, Route 53). Clone this repo, configure your AWS account once, then deploy per environment.
 
 ## Repository layout
 
 ```
 infrastructure-automation/
 ├── README.md
-├── backend.hcl.example          # Remote state overrides (copy to backend.hcl)
-├── policies/
-│   └── terraform-state-backend.json.example
+├── backend.hcl.example
 └── AWS/
-    ├── main.tf
-    ├── provider.tf
-    ├── variables.tf
-    ├── terraform.tfvars.example # Copy to terraform.tfvars
-    ├── outputs.tf
-    └── modules/networking/
+    ├── main.tf                  # Networking stack (VPC)
+    ├── terraform.tfvars.example
+    ├── modules/networking/
+    ├── iampolicies/             # Example IAM policy documents
+    └── ecs/                     # ECS Fargate + ALB stack (see ecs/README.md)
+        ├── terraform.tfvars.example
+        └── modules/...
 ```
 
 ## What gets created
@@ -42,8 +41,8 @@ Terraform needs an AWS identity that can manage VPC resources **and** read/write
 
 1. In **IAM → Users → Create user**, enable programmatic access.
 2. Attach a policy that includes:
-   - VPC/networking permissions for this stack (see `policies/terraform-networking.json.example` if you add it, or use a scoped custom policy).
-   - State backend permissions from `policies/terraform-state-backend.json.example` (adjust bucket name and table name).
+   - VPC/networking: `AWS/iampolicies/terraform-networking.json.example`
+   - State backend: `AWS/iampolicies/terraform-state-backend.json.example` (set bucket and lock table names)
 3. Save the **Access key ID** and **Secret access key**.
 
 ### Option B — IAM role (teams / CI)
@@ -164,7 +163,7 @@ Use a **unique `key` per stack and environment**, e.g.:
 | Prod networking | `networking/prod/terraform.tfstate` |
 | Another app | `myapp/staging/terraform.tfstate` |
 
-4. Copy `policies/terraform-state-backend.json.example` and replace `YOUR_STATE_BUCKET` and `YOUR_LOCK_TABLE`, then attach to your IAM user/role.
+4. Copy `AWS/iampolicies/terraform-state-backend.json.example`, set bucket and lock table ARNs, attach to your IAM user/role.
 
 ---
 
@@ -247,9 +246,28 @@ terraform apply
 
 ---
 
+## ECS stack (optional, after networking)
+
+Seven Fargate services behind an ALB with HTTPS and Route 53. Full guide: **[AWS/ecs/README.md](AWS/ecs/README.md)**.
+
+```bash
+# 1. Apply networking first (outputs: vpc_id, subnet IDs)
+cd AWS && terraform apply
+
+# 2. ECS — separate state key in backend.hcl, e.g. key = "ecs/dev/terraform.tfstate"
+cd ecs
+cp terraform.tfvars.example terraform.tfvars
+terraform init -reconfigure -backend-config=../../backend.hcl
+terraform apply
+```
+
+Attach `AWS/iampolicies/terraform-ecs.json.example` to your Terraform IAM identity in addition to the state-backend policy.
+
+---
+
 ## Adding more infrastructure
 
-- New AWS modules: `AWS/modules/<name>/`, reference from `AWS/main.tf`.
+- New AWS modules: `AWS/modules/<name>/`, reference from `AWS/main.tf` or `AWS/ecs/main.tf`.
 - Other clouds: add top-level folders (`Azure/`, `GCP/`, etc.) with their own README.
 
 ## Troubleshooting

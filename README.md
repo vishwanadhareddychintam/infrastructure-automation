@@ -1,74 +1,80 @@
 # Infrastructure Automation
 
-Reusable Terraform for AWS: **VPC networking** and **ECS Fargate** (ALB, HTTPS, Route 53). Clone this repo, configure your AWS account once, then deploy per environment.
+Terraform for AWS in **two phases**: deploy **VPC networking** first, then deploy **applications on an ECS Fargate cluster** (ALB, HTTPS, Route 53). Each phase is a separate Terraform root module with its own state file.
+
+## Deployment flow
+
+```
+Prerequisites (once per account)
+        │
+        ▼
+┌───────────────────────┐
+│ Phase 1: Networking │  AWS/  — VPC, subnets, NAT, S3 endpoint
+└───────────┬───────────┘
+            │ outputs: vpc_id, public_subnet_ids, private_subnet_ids
+            ▼
+┌───────────────────────┐
+│ Phase 2: ECS apps     │  AWS/ECS-Infrastructure/  — cluster, ALB, 7 services, DNS
+└───────────────────────┘
+```
+
+| Phase | Directory | State key (example) | Guide |
+|-------|-----------|---------------------|--------|
+| 1 — VPC | `AWS/` | `networking/dev/terraform.tfstate` | [Below](#phase-1-vpc-networking) |
+| 2 — ECS | `AWS/ECS-Infrastructure/` | `ECS-Infrastructure/dev/terraform.tfstate` | [AWS/ECS-Infrastructure/README.md](AWS/ECS-Infrastructure/README.md) |
+
+---
 
 ## Repository layout
 
 ```
 infrastructure-automation/
-├── README.md
-├── backend.hcl.example
+├── README.md                 # This file — full deployment guide
+├── backend.hcl.example       # Remote state (copy per phase; change key)
 └── AWS/
-    ├── main.tf                  # Networking stack (VPC)
+    ├── main.tf               # Phase 1: networking
     ├── terraform.tfvars.example
     ├── modules/networking/
-    ├── iampolicies/             # Example IAM policy documents
-    └── ecs/                     # ECS Fargate + ALB stack (see ecs/README.md)
-        ├── terraform.tfvars.example
-        └── modules/...
+    ├── iampolicies/          # Example IAM policies
+    └── ECS-Infrastructure/   # Phase 2: ECS application platform
+        ├── README.md
+        └── terraform.tfvars.example
 ```
-
-## What gets created
-
-| Resource | Details |
-|----------|---------|
-| VPC | DNS enabled; size from `vpc_cidr` |
-| Internet gateway | Public internet access for public subnets |
-| Subnets | 2 public + 2 private (one of each per AZ) |
-| NAT gateway | One NAT; private subnets use it for `0.0.0.0/0` |
-| Route tables | Public → IGW; private → NAT |
-| VPC endpoint | S3 gateway endpoint on private route tables |
-
-Names and tags use `{name_prefix}-{environment}` (e.g. `myapp-dev`).
 
 ---
 
-## 1. IAM profile setup
+## Prerequisites (before any Terraform)
 
-Terraform needs an AWS identity that can manage VPC resources **and** read/write remote state (S3 + DynamoDB lock).
+Complete these **once per AWS account** (or org). Both phases depend on them.
 
-### Option A — IAM user (simplest for individuals)
+### Tools
 
-1. In **IAM → Users → Create user**, enable programmatic access.
-2. Attach a policy that includes:
-   - VPC/networking: `AWS/iampolicies/terraform-networking.json.example`
-   - State backend: `AWS/iampolicies/terraform-state-backend.json.example` (set bucket and lock table names)
-3. Save the **Access key ID** and **Secret access key**.
+| Tool | Version |
+|------|---------|
+| [Terraform](https://www.terraform.io/downloads) | >= 1.4 (networking), >= 1.2 (ECS) |
+| [AWS CLI](https://aws.amazon.com/cli/) | v2 recommended |
 
-### Option B — IAM role (teams / CI)
+### IAM profile
 
-1. Create a role (e.g. `terraform-infra`) with a trust policy for your user, SSO, or CI OIDC.
-2. Attach the same policies as above.
-3. Use `aws configure` or `source_profile` + `role_arn` in `~/.aws/config` to assume the role.
+Terraform needs an identity that can manage resources **and** use remote state (S3 + DynamoDB lock).
 
-### AWS CLI profile
+**Option A — IAM user**
 
-Add to `~/.aws/credentials` (Windows: `%UserProfile%\.aws\credentials`):
+1. Create a user with programmatic access.
+2. Attach policies built from:
+   - `AWS/iampolicies/terraform-state-backend.json.example` — state bucket + lock table
+   - `AWS/iampolicies/terraform-networking.json.example` — Phase 1
+   - `AWS/iampolicies/terraform-ecs.json.example` — Phase 2 (add before ECS apply)
+3. Configure CLI profile:
 
 ```ini
+# ~/.aws/credentials
 [terraform-infra]
 aws_access_key_id     = YOUR_ACCESS_KEY_ID
 aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 ```
 
-For a role-based profile in `~/.aws/config`:
-
-```ini
-[profile terraform-infra]
-role_arn       = arn:aws:iam::123456789012:role/terraform-infra
-source_profile = your-sso-or-base-profile
-region         = us-east-1
-```
+**Option B — IAM role** (teams / CI): same policies on a role; use `role_arn` + `source_profile` in `~/.aws/config`.
 
 Verify:
 
@@ -76,25 +82,13 @@ Verify:
 aws sts get-caller-identity --profile terraform-infra
 ```
 
-Use the **same profile name** in:
+Use profile name `terraform-infra` in all `terraform.tfvars` files (or your chosen name — keep it consistent in `provider.tf`, `backend.hcl`, and tfvars).
 
-- `AWS/provider.tf` → `backend "s3" { profile = "..." }` and `provider "aws" { profile = ... }`
-- `AWS/main.tf` → `provider "aws" { profile = var.aws_profile }`
-- `backend.hcl` is optional; backend `profile` in `provider.tf` must match your CLI profile
+### S3 remote state + DynamoDB lock
 
-Set the profile in `AWS/terraform.tfvars`:
+Create once; reuse for every stack and environment.
 
-```hcl
-aws_profile = "terraform-infra"
-```
-
----
-
-## 2. S3 backend setup (remote state)
-
-Create these **once per AWS account** (or per organization), then reuse for every project/environment.
-
-### S3 bucket
+**S3 bucket** (versioning + encryption + block public access):
 
 ```bash
 export AWS_PROFILE=terraform-infra
@@ -121,11 +115,7 @@ aws s3api put-public-access-block \
   BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
 ```
 
-Use a **unique bucket name** globally. Pick a region and stick with it for the bucket and DynamoDB table.
-
-### DynamoDB lock table
-
-Terraform needs a table with partition key `LockID` (String):
+**DynamoDB lock table** (partition key `LockID`, type String):
 
 ```bash
 export LOCK_TABLE=my-org-terraform-locks
@@ -138,143 +128,201 @@ aws dynamodb create-table \
   --region "$AWS_REGION"
 ```
 
-### Wire backend into this project
-
-1. Copy `backend.hcl.example` → `backend.hcl` (add `backend.hcl` to `.gitignore` if it contains account-specific names).
-2. Set `bucket`, `key`, `region`, `dynamodb_table`, and optionally `profile`.
-3. Update `AWS/provider.tf` backend block defaults to match, or rely entirely on `backend.hcl` at init.
-
-Example `backend.hcl`:
+**`backend.hcl`** (repo root — copy from `backend.hcl.example`, gitignored):
 
 ```hcl
 bucket         = "my-org-terraform-state"
-key            = "networking/dev/terraform.tfstate"
 region         = "us-east-1"
 encrypt        = true
 dynamodb_table = "my-org-terraform-locks"
 profile        = "terraform-infra"
+# key = set per phase below
 ```
 
-Use a **unique `key` per stack and environment**, e.g.:
+| Phase | `key` in `backend.hcl` |
+|-------|-------------------------|
+| Networking (dev) | `networking/dev/terraform.tfstate` |
+| ECS Infrastructure (dev) | `ECS-Infrastructure/dev/terraform.tfstate` |
 
-| Stack / env | Suggested state key |
-|-------------|---------------------|
-| Dev networking | `networking/dev/terraform.tfstate` |
-| Prod networking | `networking/prod/terraform.tfstate` |
-| Another app | `myapp/staging/terraform.tfstate` |
-
-4. Copy `AWS/iampolicies/terraform-state-backend.json.example`, set bucket and lock table ARNs, attach to your IAM user/role.
+Use a **different `key` per phase and environment** so state files do not overwrite each other.
 
 ---
 
-## 3. VPC CIDR examples
+## Phase 1: VPC networking
 
-Subnets must sit **inside** `vpc_cidr` and must **not overlap** each other. Use private RFC1918 ranges; avoid clashes with on-prem VPN or peered VPCs.
+Creates the network foundation ECS runs on.
 
-### Small dev (single team)
+### What Phase 1 creates
+
+| Resource | Purpose |
+|----------|---------|
+| VPC | Private address space (`vpc_cidr`) |
+| Internet gateway | Internet for public subnets |
+| 2× public subnets | ALB (Phase 2) |
+| 2× private subnets | ECS tasks (Phase 2) |
+| NAT gateway | Outbound internet from private subnets |
+| S3 gateway endpoint | Private subnet access to S3 without NAT |
+
+### VPC CIDR examples
+
+Subnets must be inside `vpc_cidr` and must not overlap.
+
+**Dev**
 
 ```hcl
-vpc_cidr = "10.0.0.0/16"
+vpc_cidr             = "10.0.0.0/16"
 public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
 private_subnet_cidrs = ["10.0.3.0/24", "10.0.4.0/24"]
 ```
 
-### Staging (separate /16 from dev)
+**Staging / prod** — use separate `/16` blocks per environment (e.g. `10.20.0.0/16`, `10.30.0.0/16`).
 
-```hcl
-vpc_cidr = "10.1.0.0/16"
-public_subnet_cidrs  = ["10.1.1.0/24", "10.1.2.0/24"]
-private_subnet_cidrs = ["10.1.3.0/24", "10.1.4.0/24"]
-```
-
-### Production (larger subnets if you expect more ENIs)
-
-```hcl
-vpc_cidr = "10.2.0.0/16"
-public_subnet_cidrs  = ["10.2.0.0/24", "10.2.1.0/24"]
-private_subnet_cidrs = ["10.2.10.0/24", "10.2.11.0/24"]
-```
-
-### Multi-environment in one account (non-overlapping VPCs)
-
-| Environment | `vpc_cidr`     | Public subnets        | Private subnets       |
-|-------------|----------------|------------------------|------------------------|
-| dev         | `10.10.0.0/16` | `.0.0/24`, `.1.0/24`  | `.2.0/24`, `.3.0/24`  |
-| staging     | `10.20.0.0/16` | `.0.0/24`, `.1.0/24`  | `.2.0/24`, `.3.0/24`  |
-| prod        | `10.30.0.0/16` | `.0.0/24`, `.1.0/24`  | `.2.0/24`, `.3.0/24`  |
-
-Copy `AWS/terraform.tfvars.example` → `AWS/terraform.tfvars` and edit for your environment.
-
----
-
-## Quick start (after setup above)
+### Phase 1 — commands
 
 ```bash
+# From repo root
+cp backend.hcl.example backend.hcl
+# Edit backend.hcl: bucket, dynamodb_table, key = "networking/dev/terraform.tfstate"
+
 cd AWS
 cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars: aws_profile, name_prefix, environment, CIDRs
+# Edit: aws_profile, name_prefix, environment, vpc_cidr, subnets
 
-cd ..
-cp backend.hcl.example backend.hcl
-# Edit backend.hcl: bucket, key, dynamodb_table, profile
-
-cd AWS
 terraform init -reconfigure -backend-config=../backend.hcl
 terraform plan
 terraform apply
 ```
 
-### Outputs
+### Phase 1 — outputs (required for Phase 2)
 
-- `vpc_id`
-- `public_subnet_ids`, `private_subnet_ids`
-- `nat_gateway_id`
+```bash
+terraform output vpc_id
+terraform output public_subnet_ids
+terraform output private_subnet_ids
+```
+
+Save these values for `AWS/ECS-Infrastructure/terraform.tfvars`.
+
+| Output | Used in ECS for |
+|--------|------------------|
+| `vpc_id` | Security groups, ALB, services |
+| `public_subnet_ids` | Internet-facing ALB |
+| `private_subnet_ids` | Fargate tasks |
+
+---
+
+## Phase 2: ECS Infrastructure (application deployment)
+
+Run **only after Phase 1 succeeds**. ECS tasks run in **private subnets**; the ALB sits in **public subnets**.
+
+### Prerequisites checklist (Phase 2)
+
+| # | Requirement | Notes |
+|---|-------------|--------|
+| 1 | Phase 1 applied | `vpc_id` and subnet outputs available |
+| 2 | Same `aws_region` | ECS stack region must match VPC |
+| 3 | IAM | `terraform-ecs.json.example` attached to Terraform profile |
+| 4 | Remote state | `backend.hcl` `key` = `ECS-Infrastructure/<env>/terraform.tfstate` (not networking key) |
+| 5 | ACM certificate | HTTPS cert in ALB region for your hostnames |
+| 6 | Route 53 | Public hosted zone for `route53_domain_name` |
+| 7 | Container images | Images in ECR (or registry) referenced in `ecs_task_definitions` |
+| 8 | Secrets (optional) | Secrets Manager / SSM ARNs if tasks use `secrets` |
+
+### What Phase 2 creates
+
+| Component | Description |
+|-----------|-------------|
+| ECS cluster | Fargate (+ optional Container Insights) |
+| ALB | HTTPS, HTTP→HTTPS redirect, host-based routing |
+| 7 ECS services | Task definitions + services (customize in tfvars) |
+| Target groups | One per service |
+| Route 53 | Alias records for app hostnames |
+| Security groups | ALB ↔ tasks |
+
+Detailed steps, DNS naming, and troubleshooting: **[AWS/ECS-Infrastructure/README.md](AWS/ECS-Infrastructure/README.md)**.
+
+### Phase 2 — commands
+
+```bash
+# Update backend.hcl key for ECS, e.g.:
+#   key = "ECS-Infrastructure/dev/terraform.tfstate"
+
+cd AWS/ECS-Infrastructure
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Edit `terraform.tfvars`:
+
+```hcl
+aws_profile = "terraform-infra"
+aws_region  = "us-east-1"   # same as VPC
+
+name_prefix = "myapp"
+environment = "dev"
+
+# From Phase 1 outputs
+vpc_id             = "vpc-xxxxxxxx"
+public_subnet_ids  = ["subnet-...", "subnet-..."]
+private_subnet_ids = ["subnet-...", "subnet-..."]
+
+acm_certificate_arn   = "arn:aws:acm:..."
+route53_domain_name   = "example.com"
+# route53_hosted_zone_id = "Z..."  # optional
+
+# ECR images, ports, dns_route_target_groups — see terraform.tfvars.example
+```
+
+```bash
+terraform init -reconfigure -backend-config=../../backend.hcl
+terraform plan
+terraform apply
+```
 
 ---
 
 ## Configuration reference
 
+### Phase 1 (`AWS/terraform.tfvars`)
+
 | Variable | Description |
 |----------|-------------|
-| `aws_profile` | AWS CLI profile name (**required** in tfvars) |
+| `aws_profile` | CLI profile (**required**) |
 | `aws_region` | Region (default `us-east-1`) |
-| `vpc_cidr` | VPC CIDR block |
-| `public_subnet_cidrs` | Exactly two public subnet CIDRs |
-| `private_subnet_cidrs` | Exactly two private subnet CIDRs |
-| `name_prefix` | Resource name prefix (**required**) |
-| `environment` | Environment suffix: dev, staging, prod (**required**) |
+| `vpc_cidr` | VPC CIDR |
+| `public_subnet_cidrs` | Two public subnet CIDRs |
+| `private_subnet_cidrs` | Two private subnet CIDRs |
+| `name_prefix` | Name/tag prefix (**required**) |
+| `environment` | dev / staging / prod (**required**) |
+
+### Phase 2 (`AWS/ECS-Infrastructure/terraform.tfvars`)
+
+See [AWS/ECS-Infrastructure/README.md](AWS/ECS-Infrastructure/README.md#customization).
 
 ---
-
-## ECS stack (optional, after networking)
-
-Seven Fargate services behind an ALB with HTTPS and Route 53. Full guide: **[AWS/ecs/README.md](AWS/ecs/README.md)**.
-
-```bash
-# 1. Apply networking first (outputs: vpc_id, subnet IDs)
-cd AWS && terraform apply
-
-# 2. ECS — separate state key in backend.hcl, e.g. key = "ecs/dev/terraform.tfstate"
-cd ecs
-cp terraform.tfvars.example terraform.tfvars
-terraform init -reconfigure -backend-config=../../backend.hcl
-terraform apply
-```
-
-Attach `AWS/iampolicies/terraform-ecs.json.example` to your Terraform IAM identity in addition to the state-backend policy.
-
----
-
-## Adding more infrastructure
-
-- New AWS modules: `AWS/modules/<name>/`, reference from `AWS/main.tf` or `AWS/ecs/main.tf`.
-- Other clouds: add top-level folders (`Azure/`, `GCP/`, etc.) with their own README.
 
 ## Troubleshooting
 
-| Issue | What to check |
-|-------|----------------|
-| `AccessDenied` on `terraform init` | IAM policy for S3 bucket + DynamoDB `LockID` table; profile name matches |
-| `Error acquiring state lock` | Stale lock in DynamoDB or another user running apply |
-| Subnet CIDR errors | Subnets must be inside `vpc_cidr`; lists must have exactly two CIDRs each |
-| NAT costs | One NAT gateway per VPC; remove or use NAT instances if cost-sensitive in dev |
+### Phase 1 (VPC)
+
+| Issue | Check |
+|-------|--------|
+| `AccessDenied` on init | State backend IAM; profile name |
+| Subnet CIDR errors | Subnets inside `vpc_cidr`; exactly two per type |
+| NAT cost in dev | One NAT per VPC; consider smaller envs |
+
+### Phase 2 (ECS)
+
+| Issue | Check |
+|-------|--------|
+| Plan fails on VPC/subnets | Phase 1 outputs copied correctly; same region |
+| Target group unhealthy | `health_check_path`; SG allows ALB → container port |
+| HTTPS / cert errors | ACM ARN in same region as `aws_region` |
+| DNS not resolving | Hosted zone; `dns_route_target_groups` |
+
+---
+
+## Extending this repo
+
+- Add modules under `AWS/modules/` or `AWS/ECS-Infrastructure/modules/`.
+- Add other clouds as top-level folders (`Azure/`, `GCP/`).
+- Change folder names freely — only Terraform `source` paths must match.

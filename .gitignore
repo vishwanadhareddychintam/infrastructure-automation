@@ -1,7 +1,7 @@
 # Local secrets and overrides — never commit
 backend.hcl
 AWS/terraform.tfvars
-AWS/ecs/terraform.tfvars
+AWS/ECS-Infrastructure/terraform.tfvars
 .terraform/
 *.tfstate
 *.tfstate.*
